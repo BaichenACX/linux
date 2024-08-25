@@ -1,0 +1,54 @@
+name: Build and Release Linux Kernel
+
+on:
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+
+    - name: Configure Kernel for arm64
+      run: |
+        make ARCH=arm64 defconfig
+
+    - name: Build Kernel
+      run: |
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
+
+    - name: Archive Kernel Artifacts
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: kernel-arm64
+        path: |
+          arch/arm64/boot/Image.gz
+          arch/arm64/boot/dts/*.dtb
+          arch/arm64/boot/dts/overlays/*.dtbo
+
+    - name: Create GitHub Release
+      if: success()
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          arch/arm64/boot/Image.gz
+          arch/arm64/boot/dts/*.dtb
+          arch/arm64/boot/dts/overlays/*.dtbo
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Notify success
+      if: success()
+      run: echo "Kernel build and release succeeded!"
+      
+    - name: Notify failure
+      if: failure()
+      run: echo "Kernel build and release failed!"
